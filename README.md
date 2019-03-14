@@ -1,2 +1,2 @@
 # ICEMET OpenCV
-ICEMET Server OpenCL module.
+ICEMET Server OpenCV module.

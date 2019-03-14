@@ -30,7 +30,7 @@ public:
 	
 	bool push(const UMat& img)
 	{
-		size_t gsize[1] = {m_size.width * m_size.height};
+		size_t gsize[1] = {(size_t)(m_size.width * m_size.height)};
 		ocl::Kernel("push", ocl::icemet::bgsub_oclsrc).args(
 			ocl::KernelArg::PtrReadOnly(img),
 			ocl::KernelArg::PtrWriteOnly(m_stack),
@@ -50,7 +50,7 @@ public:
 	
 	void meddiv(UMat& dst)
 	{
-		size_t gsize[1] = {m_size.width * m_size.height};
+		size_t gsize[1] = {(size_t)(m_size.width * m_size.height)};
 		ocl::Kernel("meddiv", ocl::icemet::bgsub_oclsrc).args(
 			ocl::KernelArg::PtrReadOnly(m_stack),
 			ocl::KernelArg::PtrReadOnly(m_means.getUMat(ACCESS_READ)),

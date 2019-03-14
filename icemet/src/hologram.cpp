@@ -2,6 +2,9 @@
 
 #include "opencl_kernels_icemet.hpp"
 
+#define LPF_N 6
+#define LPF_F 0.5
+
 namespace cv { namespace icemet {
 
 class HologramImpl : public Hologram {
@@ -18,7 +21,7 @@ private:
 	UMat m_complex;
 
 private:
-	inline float Mz(float z)
+	inline float Mz(float z) const
 	{
 		float M = m_dist / (m_dist - z);
 		return M * z;
@@ -31,7 +34,6 @@ public:
 		m_dist(dist),
 		m_lambda(lambda)
 	{
-		
 		// TODO: Fix padding
 		//m_sizePad = Size2i(getOptimalDFTSize(size.width), getOptimalDFTSize(size.height));
 		m_sizePad = size;
@@ -42,7 +44,7 @@ public:
 		m_complex = UMat(m_sizePad, CV_32FC2);
 		
 		// Fill propagator
-		size_t gsize[2] = {m_sizePad.width, m_sizePad.height};
+		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		ocl::Kernel("angularspectrum", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::WriteOnly(m_prop),
 			Vec2f(psz*m_sizePad.width, psz*m_sizePad.height),
@@ -50,9 +52,9 @@ public:
 		).run(2, gsize, NULL, true);
 	}
 	
-	void set(const UMat& img) CV_OVERRIDE
+	void setImg(const UMat& img) CV_OVERRIDE
 	{
-		size_t gsize[2] = {m_sizePad.width, m_sizePad.height};
+		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		
 		// Convert to complex
 		ocl::Kernel("r2c", ocl::icemet::hologram_oclsrc).args(
@@ -66,8 +68,8 @@ public:
 	
 	void recon(UMat& dst, float z) CV_OVERRIDE
 	{
-		size_t gsizeProp[1] = {m_sizePad.width * m_sizePad.height};
-		size_t gsizeC2R[2] = {m_sizeOrig.width, m_sizeOrig.height};
+		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
+		size_t gsizeC2R[2] = {(size_t)m_sizeOrig.width, (size_t)m_sizeOrig.height};
 		
 		// Propagate
 		ocl::Kernel("propagate", ocl::icemet::hologram_oclsrc).args(
@@ -89,8 +91,8 @@ public:
 	
 	void recon(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) CV_OVERRIDE
 	{
-		size_t gsizeProp[1] = {m_sizePad.width * m_sizePad.height};
-		size_t gsizeC2R[2] = {m_sizeOrig.width, m_sizeOrig.height};
+		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
+		size_t gsizeC2R[2] = {(size_t)m_sizeOrig.width, (size_t)m_sizeOrig.height};
 		
 		int dstIdx = 0;
 		int ndst = dst.size();
@@ -113,6 +115,25 @@ public:
 				ocl::KernelArg::PtrReadWrite(dstMin)
 			).run(2, gsizeC2R, NULL, true);
 		}
+	}
+	
+	void applyFilter(const UMat& H)
+	{
+		mulSpectrums(m_dft, H, m_dft, 0);
+	}
+	
+	cv::UMat createLPF(float f) const
+	{
+		float sigma = f * pow(log(1.0/pow(LPF_F, 2)), -1.0/(2.0*LPF_N));
+		cv::UMat H(m_sizePad, CV_32FC2);
+		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
+		ocl::Kernel("lpf", ocl::icemet::hologram_oclsrc).args(
+			ocl::KernelArg::WriteOnly(H),
+			Vec2f(m_psz*m_sizePad.width, m_psz*m_sizePad.height),
+			Vec2f(sigma, sigma),
+			LPF_N
+		).run(2, gsize, NULL, true);
+		return H;
 	}
 };
 
@@ -139,7 +160,7 @@ static void focusMin(std::vector<UMat>& src, const Rect& rect, int &idx, double 
 static void focusSTD(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, int n)
 {
 	ocl::Queue q = ocl::Queue::getDefault();
-	size_t gsize[2] = {rect.width, rect.height};
+	size_t gsize[2] = {(size_t)rect.width, (size_t)rect.height};
 	
 	std::vector<UMat> slice(n);
 	std::vector<UMat> filt(n);

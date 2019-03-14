@@ -25,8 +25,7 @@ __kernel void adjust(
 __kernel void hist(
 	__global float* src,
 	__global int* dst,
-	float min,
-	float max,
+	float min, float max,
 	float step
 )
 {
@@ -38,10 +37,7 @@ __kernel void hist(
 }
 
 /* Image histogram. */
-__kernel void imghist(
-	__global uchar* src,
-	__global int* dst
-)
+__kernel void imghist(__global uchar* src, __global int* dst)
 {
 	atomic_inc(&dst[src[get_global_id(0)]]);
 }

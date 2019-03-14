@@ -14,9 +14,12 @@ typedef enum _focus_method {
 
 class CV_EXPORTS_W Hologram : public Algorithm {
 public:
-	CV_WRAP virtual void set(const UMat& img) = 0;
+	CV_WRAP virtual void setImg(const UMat& img) = 0;
 	CV_WRAP virtual void recon(UMat& dst, float z) = 0;
 	CV_WRAP virtual void recon(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
+	
+	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
+	CV_WRAP virtual cv::UMat createLPF(float f) const = 0;
 	
 	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int n=-1);
 	CV_WRAP static Ptr<Hologram> create(Size2i size, float psz, float dist, float lambda);
