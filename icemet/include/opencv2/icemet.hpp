@@ -21,7 +21,7 @@ public:
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual cv::UMat createLPF(float f) const = 0;
 	
-	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int n=-1);
+	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int first=0, int last=-1, int points=20);
 	CV_WRAP static Ptr<Hologram> create(Size2i size, float psz, float dist, float lambda);
 };
 

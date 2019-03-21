@@ -7,6 +7,13 @@
 
 namespace cv { namespace icemet {
 
+typedef struct _focus_result {
+	int imax;     // Index of the maximum value
+	int il;       // Left of the maximum
+	int ir;       // Right of the maximum
+	double score; // Maximum score found
+} FocusResult;
+
 class HologramImpl : public Hologram {
 private:
 	Size2i m_sizeOrig;
@@ -137,78 +144,110 @@ public:
 	}
 };
 
-static void focusMin(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, int n)
+static double scoreMin(const UMat& slice)
 {
-	std::vector<UMat> slice(n);
-	std::vector<double> min(n);
-	
-	for (int i = 0; i < n; i++)
-		UMat(src[i], rect).copyTo(slice[i]);
-	
-	for (int i = 0; i < n; i++)
-		minMaxLoc(slice[i], &min[i]);
-	
-	for (int i = 0; i < n; i++) {
-		double val = 255.0 - min[i];
-		if (val > score) {
-			score = val;
-			idx = i;
-		}
-	}
+	double min;
+	minMaxLoc(slice, &min);
+	return 255.0 - min;
 }
 
-static void focusSTD(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, int n)
+static double scoreSTD(const UMat& slice)
 {
-	ocl::Queue q = ocl::Queue::getDefault();
-	size_t gsize[2] = {(size_t)rect.width, (size_t)rect.height};
-	
-	std::vector<UMat> slice(n);
-	std::vector<UMat> filt(n);
-	std::vector<Vec<double,1>> mean(n);
-	std::vector<Vec<double,1>> stddev(n);
-	
-	for (int i = 0; i < n; i++) {
-		slice[i] = UMat(rect.height, rect.width, CV_8UC1);
-		filt[i] = UMat(rect.height, rect.width, CV_8UC1);
-	}
-	
-	for (int i = 0; i < n; i++)
-		UMat(src[i], rect).copyTo(slice[i]);
-	
-	for (int i = 0; i < n; i++) {
-		ocl::Kernel("stdfilt_3x3", ocl::icemet::hologram_oclsrc).args(
-			ocl::KernelArg::PtrReadOnly(slice[i]),
-			ocl::KernelArg::WriteOnly(filt[i])
-		).run(2, gsize, NULL, false, q);
-	}
-	q.finish();
-	
-	for (int i = 0; i < n; i++)
-		meanStdDev(filt[i], mean[i], stddev[i]);
-	
-	for (int i = 0; i < n; i++) {
-		double val = stddev[i][0];
-		if (val > score) {
-			score = val;
-			idx = i;
-		}
-	}
+	size_t gsize[2] = {(size_t)slice.cols, (size_t)slice.rows};
+	UMat filt(slice.size(), CV_8UC1);
+	Vec<double,1> mean;
+	Vec<double,1> stddev;
+	ocl::Kernel("stdfilt_3x3", ocl::icemet::hologram_oclsrc).args(
+		ocl::KernelArg::PtrReadOnly(slice),
+		ocl::KernelArg::WriteOnly(filt)
+	).run(2, gsize, NULL, true);
+	meanStdDev(filt, mean, stddev);
+	return stddev[0];
 }
 
-void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, int n)
+static int generateIndices(std::vector<int>& dst, int first, int last, int n)
+{
+	dst.clear();
+	float step = (float)(last - first) / n;
+	int prev = -1;
+	for (float idxf = first; roundf(idxf) < last; idxf += step) {
+		int idx = roundf(idxf);
+		if (idx != prev) {
+			prev = idx;
+			dst.push_back(idx);
+		}
+	}
+	int size = dst.size();
+	if (size)
+		dst[size-1] = last;
+	return size;
+}
+
+static void findBestIndices(FocusResult& res, const std::vector<double>& scores, const std::vector<int>& indices)
+{
+	res.imax = 0;
+	res.il = 0;
+	res.ir = 0;
+	res.score = 0;
+	int iimax = 0;
+	int sz = indices.size();
+	
+	// Find the index of largest value
+	for (int ii = 0; ii < sz; ii++) {
+		int i = indices[ii];
+		double score = scores[ii];
+		if (score > scores[iimax]) {
+			res.imax = i;
+			res.score = score;
+			iimax = ii;
+		}
+	}
+	
+	// Save left and right
+	res.il = iimax > 0 ? indices[iimax-1] : res.imax;
+	res.ir = iimax < sz-1 ? indices[iimax+1] : res.imax;
+}
+
+void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, int first, int last, int points)
 {
 	int sz = src.size();
-	n = n < 0 || n > sz ? sz : n;
+	first = first < 0 ? 0 : first;
+	last = last < 0 || last > sz-1 ? sz-1 : last;
 	
+	// Select the scoring function
+	double (*scoreFunc)(const UMat&);
 	switch (method) {
 	case FOCUS_MIN:
-		focusMin(src, rect, idx, score, n);
+		scoreFunc = scoreMin;
 		break;
 	case FOCUS_STD:
-		focusSTD(src, rect, idx, score, n);
+		scoreFunc = scoreSTD;
 		break;
 	default:
-		focusSTD(src, rect, idx, score, n);
+		scoreFunc = scoreSTD;
+	}
+	
+	// Allocate slices
+	std::vector<UMat> slices(points);
+	for (int i = 0; i < points; i++)
+		slices[i] = UMat(rect.height, rect.width, CV_8UC1);
+	
+	// Start iterating
+	FocusResult res = {0, first, last, 0.0};
+	int n = points;
+	while (n >= points) {
+		std::vector<int> indices;
+		n = generateIndices(indices, res.il, res.ir, points);
+		
+		std::vector<double> scores(n);
+		for (int i = 0; i < n; i++)
+			UMat(src[indices[i]], rect).copyTo(slices[i]);
+		for (int i = 0; i < n; i++)
+			scores[i] = scoreFunc(slices[i]);
+		
+		findBestIndices(res, scores, indices);
+		idx = res.imax;
+		score = res.score;
 	}
 }
 
