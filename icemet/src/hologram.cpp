@@ -193,13 +193,13 @@ static void findBestIndices(FocusResult& res, const std::vector<double>& scores,
 	int sz = indices.size();
 	
 	// Find the index of largest value
-	for (int ii = 0; ii < sz; ii++) {
-		int i = indices[ii];
-		double score = scores[ii];
+	for (int i = 0; i < sz; i++) {
+		int idx = indices[i];
+		double score = scores[i];
 		if (score > scores[iimax]) {
-			res.imax = i;
+			res.imax = idx;
 			res.score = score;
-			iimax = ii;
+			iimax = i;
 		}
 	}
 	
@@ -211,7 +211,6 @@ static void findBestIndices(FocusResult& res, const std::vector<double>& scores,
 void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, int first, int last, int points)
 {
 	int sz = src.size();
-	first = first < 0 ? 0 : first;
 	last = last < 0 || last > sz-1 ? sz-1 : last;
 	
 	// Select the scoring function
@@ -227,25 +226,39 @@ void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double 
 		scoreFunc = scoreSTD;
 	}
 	
-	// Allocate slices
-	std::vector<UMat> slices(points);
-	for (int i = 0; i < points; i++)
-		slices[i] = UMat(rect.height, rect.width, CV_8UC1);
+	// We store every score in this map to make sure we don't calculate same
+	// scores multiple times
+	std::map<int,double> scoreMap;
+	FocusResult res = {0, first, last, 0.0};
+	UMat slice(rect.height, rect.width, CV_8UC1);
 	
 	// Start iterating
-	FocusResult res = {0, first, last, 0.0};
 	int n = points;
 	while (n >= points) {
 		std::vector<int> indices;
 		n = generateIndices(indices, res.il, res.ir, points);
 		
-		std::vector<double> scores(n);
-		for (int i = 0; i < n; i++)
-			UMat(src[indices[i]], rect).copyTo(slices[i]);
-		for (int i = 0; i < n; i++)
-			scores[i] = scoreFunc(slices[i]);
+		// Fill our score vector
+		std::vector<double> scoreVec(n);
+		for (int i = 0; i < n; i++) {
+			int scoreIdx = indices[i];
+			
+			// Check if the score is already in our score map
+			auto it = scoreMap.find(scoreIdx);
+			if (it != scoreMap.end()) {
+				scoreVec[i] = it->second;
+			}
+			else {
+				// Calculate the score
+				UMat(src[scoreIdx], rect).copyTo(slice);
+				double newScore = scoreFunc(slice);
+				scoreVec[i] = newScore;
+				scoreMap[scoreIdx] = newScore;
+			}
+		}
 		
-		findBestIndices(res, scores, indices);
+		// Find the maximum value and surrounding indices
+		findBestIndices(res, scoreVec, indices);
 		idx = res.imax;
 		score = res.score;
 	}

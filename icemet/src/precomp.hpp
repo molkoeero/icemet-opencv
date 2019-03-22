@@ -7,4 +7,6 @@
 
 #include "opencv2/icemet.hpp"
 
+#include <map>
+
 #endif
