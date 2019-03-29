@@ -20,26 +20,19 @@ private:
 	Size2i m_sizePad;
 	
 	float m_psz;
-	float m_dist;
 	float m_lambda;
+	float m_dist;
 	
 	UMat m_prop;
 	UMat m_dft;
 	UMat m_complex;
 
-private:
-	inline float Mz(float z) const
-	{
-		float M = m_dist / (m_dist - z);
-		return M * z;
-	}
-
 public:
-	HologramImpl(Size2i size, float psz, float dist, float lambda) :
+	HologramImpl(Size2i size, float psz, float lambda, float dist) :
 		m_sizeOrig(size),
 		m_psz(psz),
-		m_dist(dist),
-		m_lambda(lambda)
+		m_lambda(lambda),
+		m_dist(dist)
 	{
 		// TODO: Fix padding
 		//m_sizePad = Size2i(getOptimalDFTSize(size.width), getOptimalDFTSize(size.height));
@@ -83,7 +76,7 @@ public:
 			ocl::KernelArg::PtrReadOnly(m_dft),
 			ocl::KernelArg::PtrReadOnly(m_prop),
 			ocl::KernelArg::PtrWriteOnly(m_complex),
-			Mz(z)
+			z * magnf(m_dist, z)
 		).run(1, gsizeProp, NULL, true);
 		
 		// IFFT
@@ -109,7 +102,7 @@ public:
 				ocl::KernelArg::PtrReadOnly(m_dft),
 				ocl::KernelArg::PtrReadOnly(m_prop),
 				ocl::KernelArg::PtrWriteOnly(m_complex),
-				Mz(z)
+				z * magnf(m_dist, z)
 			).run(1, gsizeProp, NULL, true);
 			
 			// IFFT
@@ -208,6 +201,11 @@ static void findBestIndices(FocusResult& res, const std::vector<double>& scores,
 	res.ir = iimax < sz-1 ? indices[iimax+1] : res.imax;
 }
 
+float Hologram::magnf(float dist, float z)
+{
+	return dist == 0.0 ? 1.0 : dist / (dist - z);
+}
+
 void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, int first, int last, int points)
 {
 	int sz = src.size();
@@ -264,9 +262,9 @@ void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double 
 	}
 }
 
-Ptr<Hologram> Hologram::create(Size2i size, float psz, float dist, float lambda)
+Ptr<Hologram> Hologram::create(Size2i size, float psz, float lambda, float dist)
 {
-	return makePtr<HologramImpl>(size, psz, dist, lambda);
+	return makePtr<HologramImpl>(size, psz, lambda, dist);
 }
 
 }}

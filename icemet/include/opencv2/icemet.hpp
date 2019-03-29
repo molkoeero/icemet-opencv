@@ -21,8 +21,9 @@ public:
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual cv::UMat createLPF(float f) const = 0;
 	
+	CV_WRAP static float magnf(float dist, float z);
 	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int first=0, int last=-1, int points=20);
-	CV_WRAP static Ptr<Hologram> create(Size2i size, float psz, float dist, float lambda);
+	CV_WRAP static Ptr<Hologram> create(Size2i size, float psz, float lambda, float dist=0.0);
 };
 
 class CV_EXPORTS_W BGSubStack : public Algorithm {
