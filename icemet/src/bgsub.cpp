@@ -24,8 +24,8 @@ public:
 	{
 		CV_Assert(len <= STACK_LEN_MAX);
 		CV_Assert(len%2);
-		m_stack = cv::UMat(1, len * m_size.width * m_size.height, CV_8UC1);
-		m_means = cv::Mat(1, len, CV_32FC1);
+		m_stack = UMat(1, len * m_size.width * m_size.height, CV_8UC1);
+		m_means = Mat(1, len, CV_32FC1);
 	}
 	
 	bool push(const UMat& img)

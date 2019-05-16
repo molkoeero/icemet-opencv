@@ -122,10 +122,10 @@ public:
 		mulSpectrums(m_dft, H, m_dft, 0);
 	}
 	
-	cv::UMat createLPF(float f) const
+	UMat createLPF(float f) const
 	{
 		float sigma = f * pow(log(1.0/pow(LPF_F, 2)), -1.0/(2.0*LPF_N));
-		cv::UMat H(m_sizePad, CV_32FC2);
+		UMat H(m_sizePad, CV_32FC2);
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		ocl::Kernel("lpf", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::WriteOnly(H),
@@ -156,6 +156,16 @@ static double scoreSTD(const UMat& slice)
 	).run(2, gsize, NULL, true);
 	meanStdDev(filt, mean, stddev);
 	return stddev[0];
+}
+
+static double scoreToG(const UMat& slice)
+{
+	UMat grad;
+	Sobel(slice, grad, CV_8UC1, 1, 1);
+	Vec<double,1> mean;
+	Vec<double,1> stddev;
+	meanStdDev(grad, mean, stddev);
+	return sqrt(stddev[0] / mean[0]);
 }
 
 static int generateIndices(std::vector<int>& dst, int first, int last, int n)
@@ -219,6 +229,9 @@ void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double 
 		break;
 	case FOCUS_STD:
 		scoreFunc = scoreSTD;
+		break;
+	case FOCUS_TOG:
+		scoreFunc = scoreToG;
 		break;
 	default:
 		scoreFunc = scoreSTD;
