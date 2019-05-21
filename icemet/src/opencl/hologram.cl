@@ -110,8 +110,8 @@ cfloat shift(int x, int y, int dir)
 	return cexp(cmul(cnum(dir * M_PI * (x+y), 0.0), cnum(0.0, 1.0)));
 }
 
-/* Convert real numbers to complex. */
-__kernel void r2c(
+/* Convert real numbers to complex and shift. */
+__kernel void r2cs(
 	__global uchar* src,
 	int src_step, int src_offset,
 	int src_h, int src_w,
@@ -123,14 +123,11 @@ __kernel void r2c(
 	const int x = get_global_id(0);
 	const int y = get_global_id(1);
 	
-	if (x >= src_w || y >= src_h)
-		dst[y*dst_w + x] = cnum(0.0, 0.0);
-	else
-		dst[y*dst_w + x] = cmul(cnum(src[y*src_w + x], 0.0), shift(x, y, 1));
+	dst[y*dst_w + x] = x >= src_w || y >= src_h ? cnum(0.0, 0.0) : cmul(cnum(src[y*src_w + x], 0.0), shift(x, y, 1));
 }
 
-/* Converts complex numbers to real. */
-__kernel void c2r(
+/* Saves complex amplitude. */
+__kernel void amplitude(
 	__global cfloat* src,
 	int src_step, int src_offset,
 	int src_h, int src_w,
@@ -142,11 +139,12 @@ __kernel void c2r(
 	const int x = get_global_id(0);
 	const int y = get_global_id(1);
 	
-	dst[y*dst_w + x] = cabs(cmul(src[y*src_w + x], shift(x, y, -1)));
+	if (x >= dst_w || y >= dst_h) return;
+	dst[y*dst_w + x] = cabs(src[y*src_w + x]);
 }
 
-/* Converts complex numbers to real and updates minimum image. */
-__kernel void c2r_min(
+/* Saves complex amplitude and updates the minimum image. */
+__kernel void amplitude_min(
 	__global cfloat* src,
 	int src_step, int src_offset,
 	int src_h, int src_w,
@@ -159,7 +157,8 @@ __kernel void c2r_min(
 	const int x = get_global_id(0);
 	const int y = get_global_id(1);
 	
-	uchar val = cabs(cmul(src[y*src_w + x], shift(x, y, -1)));
+	if (x >= dst_w || y >= dst_h) return;
+	uchar val = cabs(src[y*src_w + x]);
 	img_min[y*dst_w + x] = min(val, img_min[y*dst_w + x]);
 	dst[y*dst_w + x] = val;
 }

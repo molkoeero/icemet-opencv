@@ -34,9 +34,7 @@ public:
 		m_lambda(lambda),
 		m_dist(dist)
 	{
-		// TODO: Fix padding
-		//m_sizePad = Size2i(getOptimalDFTSize(size.width), getOptimalDFTSize(size.height));
-		m_sizePad = size;
+		m_sizePad = Size2i(getOptimalDFTSize(size.width), getOptimalDFTSize(size.height));
 		
 		// Allocate UMats
 		m_prop = UMat(m_sizePad, CV_32FC2);
@@ -57,7 +55,7 @@ public:
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		
 		// Convert to complex
-		ocl::Kernel("r2c", ocl::icemet::hologram_oclsrc).args(
+		ocl::Kernel("r2cs", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::ReadOnly(img),
 			ocl::KernelArg::WriteOnly(m_dft)
 		).run(2, gsize, NULL, true);
@@ -69,7 +67,7 @@ public:
 	void recon(UMat& dst, float z) CV_OVERRIDE
 	{
 		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
-		size_t gsizeC2R[2] = {(size_t)m_sizeOrig.width, (size_t)m_sizeOrig.height};
+		size_t gsizeC2R[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		
 		// Propagate
 		ocl::Kernel("propagate", ocl::icemet::hologram_oclsrc).args(
@@ -83,7 +81,7 @@ public:
 		idft(m_complex, m_complex, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT);
 		
 		// Convert to real
-		ocl::Kernel("c2r", ocl::icemet::hologram_oclsrc).args(
+		ocl::Kernel("amplitude", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::ReadOnly(m_complex),
 			ocl::KernelArg::WriteOnly(dst)
 		).run(2, gsizeC2R, NULL, true);
@@ -109,7 +107,7 @@ public:
 			idft(m_complex, m_complex, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT);
 			
 			// Convert to real
-			ocl::Kernel("c2r_min", ocl::icemet::hologram_oclsrc).args(
+			ocl::Kernel("amplitude_min", ocl::icemet::hologram_oclsrc).args(
 				ocl::KernelArg::ReadOnly(m_complex),
 				ocl::KernelArg::WriteOnly(dst[dstIdx++]),
 				ocl::KernelArg::PtrReadWrite(dstMin)
