@@ -69,6 +69,10 @@ public:
 		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
 		size_t gsizeC2R[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		
+		// Allocate dst
+		if (dst.empty())
+			dst = cv::UMat(m_sizeOrig, CV_8UC1);
+		
 		// Propagate
 		ocl::Kernel("propagate", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::PtrReadOnly(m_dft),
@@ -92,9 +96,13 @@ public:
 		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
 		size_t gsizeC2R[2] = {(size_t)m_sizeOrig.width, (size_t)m_sizeOrig.height};
 		
+		// Allocate dst
+		int n = roundf((z1 - z0) / dz) - dst.size();
+		for (int i = 0; i < n; i++)
+			dst.emplace_back(m_sizeOrig, CV_8UC1);
+		
 		int dstIdx = 0;
-		int ndst = dst.size();
-		for (float z = z0; z < z1 && dstIdx < ndst; z += dz) {
+		for (float z = z0; z < z1; z += dz) {
 			// Propagate
 			ocl::Kernel("propagate", ocl::icemet::hologram_oclsrc).args(
 				ocl::KernelArg::PtrReadOnly(m_dft),
