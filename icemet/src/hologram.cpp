@@ -94,9 +94,11 @@ public:
 	void recon(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) CV_OVERRIDE
 	{
 		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
-		size_t gsizeC2R[2] = {(size_t)m_sizeOrig.width, (size_t)m_sizeOrig.height};
+		size_t gsizeC2R[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		
-		// Allocate dst
+		// Allocate UMats
+		if (dstMin.empty())
+			dstMin = cv::UMat(m_sizeOrig, CV_8UC1, cv::Scalar(255));
 		int n = roundf((z1 - z0) / dz) - dst.size();
 		for (int i = 0; i < n; i++)
 			dst.emplace_back(m_sizeOrig, CV_8UC1);
