@@ -70,7 +70,7 @@ __kernel void meddiv(
 	int idx
 )
 {
-	const int gid = get_global_id(0);
+	int gid = get_global_id(0);
 	
 	// Fill median array
 	uchar A[STACK_LEN_MAX];

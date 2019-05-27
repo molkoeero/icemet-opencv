@@ -37,9 +37,9 @@ public:
 		m_sizePad = Size2i(getOptimalDFTSize(size.width), getOptimalDFTSize(size.height));
 		
 		// Allocate UMats
-		m_prop = UMat(m_sizePad, CV_32FC2);
-		m_dft = UMat(m_sizePad, CV_32FC2);
-		m_complex = UMat(m_sizePad, CV_32FC2);
+		m_prop = UMat::zeros(m_sizePad, CV_32FC2);
+		m_dft = UMat::zeros(m_sizePad, CV_32FC2);
+		m_complex = UMat::zeros(m_sizePad, CV_32FC2);
 		
 		// Fill propagator
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
@@ -61,7 +61,7 @@ public:
 		).run(2, gsize, NULL, true);
 		
 		// FFT
-		dft(m_dft, m_dft, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT|DFT_SCALE);
+		dft(m_dft, m_dft, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT|DFT_SCALE, m_sizeOrig.height);
 	}
 	
 	void recon(UMat& dst, float z) CV_OVERRIDE
@@ -71,7 +71,7 @@ public:
 		
 		// Allocate dst
 		if (dst.empty())
-			dst = cv::UMat(m_sizeOrig, CV_8UC1);
+			dst = UMat(m_sizeOrig, CV_8UC1);
 		
 		// Propagate
 		ocl::Kernel("propagate", ocl::icemet::hologram_oclsrc).args(
@@ -82,7 +82,7 @@ public:
 		).run(1, gsizeProp, NULL, true);
 		
 		// IFFT
-		idft(m_complex, m_complex, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT);
+		idft(m_complex, m_complex, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT, m_sizeOrig.height);
 		
 		// Convert to real
 		ocl::Kernel("amplitude", ocl::icemet::hologram_oclsrc).args(
@@ -98,7 +98,7 @@ public:
 		
 		// Allocate UMats
 		if (dstMin.empty())
-			dstMin = cv::UMat(m_sizeOrig, CV_8UC1, cv::Scalar(255));
+			dstMin = UMat(m_sizeOrig, CV_8UC1, Scalar(255));
 		int n = roundf((z1 - z0) / dz) - dst.size();
 		for (int i = 0; i < n; i++)
 			dst.emplace_back(m_sizeOrig, CV_8UC1);

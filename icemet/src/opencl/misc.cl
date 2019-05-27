@@ -6,7 +6,7 @@ __kernel void adjust(
 	uchar b0, uchar b1
 )
 {
-	const int i = get_global_id(0);
+	int i = get_global_id(0);
 	float val = src[i];
 	
 	if (val < a0)
