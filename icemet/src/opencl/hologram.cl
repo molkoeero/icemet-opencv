@@ -1,43 +1,11 @@
 typedef float2 cfloat;
 
-/* Real part. */
-__attribute__((always_inline))
-float creal(cfloat z)
-{
-	return z.x;
-}
-
-/* Imaginiary part. */
-__attribute__((always_inline))
-float cimag(cfloat z)
-{
-	return z.y;
-}
-
 /* Create complex number. */
 __attribute__((always_inline))
 cfloat cnum(float r, float i)
 {
 	return (cfloat)(r, i);
 }
-
-/* Addition. */
-/* UNUSED
-__attribute__((always_inline))
-cfloat cadd(cfloat z1, cfloat z2)
-{
-	return z1 + z2;
-}
-*/
-
-/* Subtraction. */
-/* UNUSED
-__attribute__((always_inline))
-cfloat csub(cfloat z1, cfloat z2)
-{
-	return z1 - z2;
-}
-*/
 
 /* Multiplication. */
 __attribute__((always_inline))
@@ -47,25 +15,6 @@ cfloat cmul(cfloat z1, cfloat z2)
 		z1.x*z2.x - z1.y*z2.y,
 		z1.x*z2.y + z1.y*z2.x
 	);
-}
-
-/* Division. */
-/* UNUSED
-__attribute__((always_inline))
-cfloat cdiv(cfloat z1, cfloat z2)
-{
-	return (cfloat)(
-		(z1.x*z2.x + z1.y*z2.y) / (z2.x*z2.x + z2.y*z2.y),
-		(z1.y*z2.x - z1.x*z2.y) / (z2.x*z2.x + z2.y*z2.y)
-	);
-}
-*/
-
-/* Absolute. */
-__attribute__((always_inline))
-float cabs(cfloat z)
-{
-	return length(z);
 }
 
 /* Exponential function. */
@@ -94,24 +43,8 @@ cfloat ccos(cfloat z)
 	return (cfloat)(cos(x) * cosh(y), -sin(x) * sinh(y));
 }
 
-/* Tangent. */
-/* UNUSED
-__attribute__((always_inline))
-cfloat ctan(cfloat z)
-{
-	return cdiv(csin(z), ccos(z));
-}
-*/
-
-/* FFT shift e^(dir * i * pi * (x+y)). */
-__attribute__((always_inline))
-cfloat shift(int x, int y, int dir)
-{
-	return cexp(cmul(cnum(dir * M_PI * (x+y), 0.0), cnum(0.0, 1.0)));
-}
-
-/* Convert real numbers to complex and shift. */
-__kernel void r2cs(
+/* Convert real numbers to complex. */
+__kernel void r2c(
 	__global uchar* src, int src_step, int src_offset, int src_h, int src_w,
 	__global cfloat* dst, int dst_step, int dst_offset, int dst_h, int dst_w
 )
@@ -119,7 +52,7 @@ __kernel void r2cs(
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x >= src_w || y >= src_h) return;
-	dst[y*dst_w + x] = cmul(cnum(src[y*src_w + x], 0.0), shift(x, y, 1));
+	dst[y*dst_w + x] = cnum(src[y*src_w + x], 0);
 }
 
 /* Saves complex amplitude. */
@@ -131,7 +64,28 @@ __kernel void amplitude(
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x >= dst_w || y >= dst_h) return;
-	dst[y*dst_w + x] = cabs(src[y*src_w + x]);
+	float val = length(src[y*src_w + x]);
+	dst[y*dst_w + x] = val > 255 ? 255 : val;
+}
+
+/* Saves complex phase. */
+__kernel void phase(
+	__global cfloat* src, int src_step, int src_offset, int src_h, int src_w,
+	__global uchar* dst, int dst_step, int dst_offset, int dst_h, int dst_w,
+	float lambda,
+	float z
+)
+{
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+	if (x >= dst_w || y >= dst_h) return;
+	
+	// Normalization
+	cfloat phase_factor = cexp(cmul(cnum(2 * M_PI * z / lambda, 0), cnum(0, 1)));
+	cfloat H = cexp(cmul(atan2(phase_factor.y, phase_factor.x), cnum(0, -1)));
+	cfloat val = cmul(src[y*src_w + x], H);
+	
+	dst[y*dst_w + x] = (atan2pi(val.y, val.x)+1) / 2 * 255;
 }
 
 /* Saves complex amplitude and updates the minimum image. */
@@ -144,7 +98,7 @@ __kernel void amplitude_min(
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x >= dst_w || y >= dst_h) return;
-	uchar val = cabs(src[y*src_w + x]);
+	uchar val = length(src[y*src_w + x]);
 	img_min[y*dst_w + x] = min(val, img_min[y*dst_w + x]);
 	dst[y*dst_w + x] = val;
 }
@@ -160,12 +114,12 @@ __kernel void angularspectrum(
 	int y = get_global_id(1);
 	if (x >= w || y >= h) return;
 	
-	float u = ((float)x - w/2.0 - 1.0) / size.x;
-	float v = ((float)y - h/2.0 - 1.0) / size.y;
+	float u = (float)(x < w/2 ? x : -(w - x)) / size.x;
+	float v = (float)(y < h/2 ? y : -(h - y)) / size.y;
 	
 	// (2*pi*i)/lambda * sqrt(1 - (lambda*u)^2 - (lambda*v)^2)
-	float root = native_sqrt(1 - pow(lambda*u, 2) - pow(lambda*v, 2));
-	prop[y*w + x] = cmul(cnum(2 * M_PI * root / lambda, 0.0), cnum(0.0, 1.0));
+	float root = sqrt(1 - lambda*lambda * (u*u + v*v));
+	prop[y*w + x] = cmul(cnum(2 * M_PI * root / lambda, 0), cnum(0, 1));
 }
 
 /* Performs propagation. */
@@ -178,7 +132,7 @@ __kernel void propagate(
 {
 	// x * e^(z * prop)
 	int i = get_global_id(0);
-	dst[i] = cmul(src[i], cexp(cmul(prop[i], cnum(z, 0.0))));
+	dst[i] = cmul(src[i], cexp(cmul(prop[i], cnum(z, 0))));
 }
 
 /* Generates a super-Gaussian low-pass filter. */
@@ -193,8 +147,8 @@ __kernel void lpf(
 	int y = get_global_id(1);
 	if (x >= w || y >= h) return;
 	
-	float u = ((float)x - w/2.0 - 1.0) / size.x;
-	float v = ((float)y - h/2.0 - 1.0) / size.y;
+	float u = (float)(x < w/2 ? x : -(w - x)) / size.x;
+	float v = (float)(y < h/2 ? y : -(h - y)) / size.y;
 	
 	H[y*w + x] = cnum(exp(-1.0/2.0 * pow(pow(u / sigma.x, 2) + pow(v / sigma.y, 2), n)), 0.0);
 }
@@ -222,5 +176,5 @@ __kernel void stdfilt_3x3(
 	}
 	float mean = sum / n;
 	float var = sqsum / n - mean*mean;
-	dst[y*w + x] = native_sqrt(var);
+	dst[y*w + x] = sqrt(var);
 }

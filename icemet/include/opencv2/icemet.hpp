@@ -7,6 +7,12 @@
 
 namespace cv { namespace icemet {
 
+typedef enum _recon_output_type {
+	RECON_OUTPUT_AMPLITUDE = 0,
+	RECON_OUTPUT_PHASE,
+	RECON_OUTPUT_COMPLEX
+} ReconOutputType;
+
 typedef enum _focus_method {
 	FOCUS_MIN = 0,
 	FOCUS_STD,
@@ -16,8 +22,8 @@ typedef enum _focus_method {
 class CV_EXPORTS_W Hologram : public Algorithm {
 public:
 	CV_WRAP virtual void setImg(const UMat& img) = 0;
-	CV_WRAP virtual void recon(UMat& dst, float z) = 0;
-	CV_WRAP virtual void recon(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
+	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutputType type=RECON_OUTPUT_AMPLITUDE) = 0;
+	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
 	
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual UMat createLPF(float f) const = 0;

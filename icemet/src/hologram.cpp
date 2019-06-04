@@ -55,7 +55,7 @@ public:
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
 		
 		// Convert to complex
-		ocl::Kernel("r2cs", ocl::icemet::hologram_oclsrc).args(
+		ocl::Kernel("r2c", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::ReadOnly(img),
 			ocl::KernelArg::WriteOnly(m_dft)
 		).run(2, gsize, NULL, true);
@@ -64,14 +64,10 @@ public:
 		dft(m_dft, m_dft, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT|DFT_SCALE, m_sizeOrig.height);
 	}
 	
-	void recon(UMat& dst, float z) CV_OVERRIDE
+	void recon(UMat& dst, float z, ReconOutputType type) CV_OVERRIDE
 	{
 		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
 		size_t gsizeC2R[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
-		
-		// Allocate dst
-		if (dst.empty())
-			dst = UMat(m_sizeOrig, CV_8UC1);
 		
 		// Propagate
 		ocl::Kernel("propagate", ocl::icemet::hologram_oclsrc).args(
@@ -84,14 +80,33 @@ public:
 		// IFFT
 		idft(m_complex, m_complex, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT, m_sizeOrig.height);
 		
-		// Convert to real
-		ocl::Kernel("amplitude", ocl::icemet::hologram_oclsrc).args(
-			ocl::KernelArg::ReadOnly(m_complex),
-			ocl::KernelArg::WriteOnly(dst)
-		).run(2, gsizeC2R, NULL, true);
+		// Generate output
+		switch (type) {
+			case RECON_OUTPUT_AMPLITUDE:
+				if (dst.empty())
+					dst = UMat(m_sizeOrig, CV_8UC1);
+				ocl::Kernel("amplitude", ocl::icemet::hologram_oclsrc).args(
+					ocl::KernelArg::ReadOnly(m_complex),
+					ocl::KernelArg::WriteOnly(dst)
+				).run(2, gsizeC2R, NULL, true);
+				break;
+			case RECON_OUTPUT_PHASE:
+				if (dst.empty())
+					dst = UMat(m_sizeOrig, CV_8UC1);
+				ocl::Kernel("phase", ocl::icemet::hologram_oclsrc).args(
+					ocl::KernelArg::ReadOnly(m_complex),
+					ocl::KernelArg::WriteOnly(dst),
+					m_lambda,
+					z * magnf(m_dist, z)
+				).run(2, gsizeC2R, NULL, true);
+				break;
+			case RECON_OUTPUT_COMPLEX:
+				UMat(m_complex, Rect(Point(0, 0), m_sizeOrig)).copyTo(dst);
+				break;
+		}
 	}
 	
-	void recon(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) CV_OVERRIDE
+	void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) CV_OVERRIDE
 	{
 		size_t gsizeProp[1] = {(size_t)(m_sizePad.width * m_sizePad.height)};
 		size_t gsizeC2R[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
