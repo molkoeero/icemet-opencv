@@ -43,35 +43,22 @@ cfloat ccos(cfloat z)
 	return (cfloat)(cos(x) * cosh(y), -sin(x) * sinh(y));
 }
 
-/* Convert real numbers to complex. */
-__kernel void r2c(
-	__global uchar* src, int src_step, int src_offset, int src_h, int src_w,
-	__global cfloat* dst, int dst_step, int dst_offset, int dst_h, int dst_w
-)
-{
-	int x = get_global_id(0);
-	int y = get_global_id(1);
-	if (x >= src_w || y >= src_h) return;
-	dst[y*dst_w + x] = cnum(src[y*src_w + x], 0);
-}
-
 /* Saves complex amplitude. */
 __kernel void amplitude(
 	__global cfloat* src, int src_step, int src_offset, int src_h, int src_w,
-	__global uchar* dst, int dst_step, int dst_offset, int dst_h, int dst_w
+	__global float* dst, int dst_step, int dst_offset, int dst_h, int dst_w
 )
 {
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x >= dst_w || y >= dst_h) return;
-	float val = length(src[y*src_w + x]);
-	dst[y*dst_w + x] = val > 255 ? 255 : val;
+	dst[y*dst_w + x] = length(src[y*src_w + x]);
 }
 
 /* Saves complex phase. */
 __kernel void phase(
 	__global cfloat* src, int src_step, int src_offset, int src_h, int src_w,
-	__global uchar* dst, int dst_step, int dst_offset, int dst_h, int dst_w,
+	__global float* dst, int dst_step, int dst_offset, int dst_h, int dst_w,
 	float lambda,
 	float z
 )
@@ -85,11 +72,11 @@ __kernel void phase(
 	cfloat H = cexp(cmul(atan2(phase_factor.y, phase_factor.x), cnum(0, -1)));
 	cfloat val = cmul(src[y*src_w + x], H);
 	
-	dst[y*dst_w + x] = (atan2pi(val.y, val.x)+1) / 2 * 255;
+	dst[y*dst_w + x] = atan2(val.y, val.x);
 }
 
 /* Saves complex amplitude and updates the minimum image. */
-__kernel void amplitude_min(
+__kernel void amplitude_min_8u(
 	__global cfloat* src, int src_step, int src_offset, int src_h, int src_w,
 	__global uchar* dst, int dst_step, int dst_offset, int dst_h, int dst_w,
 	__global uchar* img_min
@@ -155,8 +142,8 @@ __kernel void lpf(
 
 /* Applies 3x3 standard deviation filter to image. */
 __kernel void stdfilt_3x3(
-	__global uchar* src,
-	__global uchar* dst, int step, int offset, int h, int w
+	__global float* src,
+	__global float* dst, int step, int offset, int h, int w
 )
 {
 	int x = get_global_id(0);
@@ -177,4 +164,23 @@ __kernel void stdfilt_3x3(
 	float mean = sum / n;
 	float var = sqsum / n - mean*mean;
 	dst[y*w + x] = sqrt(var);
+}
+
+/* Generates the gradient of complex image. */
+__kernel void gradient(
+	__global cfloat* src,
+	__global float* dst, int step, int offset, int h, int w
+)
+{
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+	if (x == 0 || y == 0) {
+		dst[y*w + x] = 0;
+	}
+	else if (x < w && y < h) {
+		cfloat u00 = src[y*w + x];
+		cfloat u10 = src[(y-1)*w + x];
+		cfloat u01 = src[y*w + (x-1)];
+		dst[y*w + x] = sqrt(pow(length(u00 - u10), 2) + pow(length(u00 - u01), 2));
+	}
 }

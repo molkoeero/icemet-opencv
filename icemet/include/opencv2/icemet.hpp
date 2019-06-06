@@ -7,14 +7,16 @@
 
 namespace cv { namespace icemet {
 
-typedef enum _recon_output_type {
+typedef enum _recon_output {
 	RECON_OUTPUT_AMPLITUDE = 0,
 	RECON_OUTPUT_PHASE,
 	RECON_OUTPUT_COMPLEX
-} ReconOutputType;
+} ReconOutput;
 
 typedef enum _focus_method {
 	FOCUS_MIN = 0,
+	FOCUS_MAX,
+	FOCUS_RANGE,
 	FOCUS_STD,
 	FOCUS_TOG
 } FocusMethod;
@@ -22,14 +24,18 @@ typedef enum _focus_method {
 class CV_EXPORTS_W Hologram : public Algorithm {
 public:
 	CV_WRAP virtual void setImg(const UMat& img) = 0;
-	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutputType type=RECON_OUTPUT_AMPLITUDE) = 0;
+	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutput output=RECON_OUTPUT_AMPLITUDE) = 0;
 	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
+	
+	CV_WRAP virtual float focus(float z0, float z1, float dz, FocusMethod method=FOCUS_STD, int points=20);
 	
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual UMat createLPF(float f) const = 0;
 	
 	CV_WRAP static float magnf(float dist, float z);
+	
 	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int first=0, int last=-1, int points=20);
+	
 	CV_WRAP static Ptr<Hologram> create(Size2i size, float psz, float lambda, float dist=0.0);
 };
 
