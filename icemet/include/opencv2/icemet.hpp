@@ -27,7 +27,7 @@ public:
 	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutput output=RECON_OUTPUT_AMPLITUDE) = 0;
 	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
 	
-	CV_WRAP virtual float focus(float z0, float z1, float dz, FocusMethod method=FOCUS_STD, int points=20);
+	CV_WRAP virtual float focus(float z0, float z1, float dz, FocusMethod method=FOCUS_STD, int points=20) = 0;
 	
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual UMat createLPF(float f) const = 0;

@@ -59,12 +59,12 @@ static double scoreToG(const UMat& slice)
 {
 	size_t gsize[2] = {(size_t)slice.cols, (size_t)slice.rows};
 	UMat grad(slice.size(), CV_32FC1);
+	Vec<double,1> mean;
+	Vec<double,1> stddev;
 	ocl::Kernel("gradient", ocl::icemet::hologram_oclsrc).args(
 		ocl::KernelArg::PtrReadOnly(slice),
 		ocl::KernelArg::WriteOnly(grad)
 	).run(2, gsize, NULL, true);
-	Vec<double,1> mean;
-	Vec<double,1> stddev;
 	meanStdDev(grad, mean, stddev);
 	return sqrt(stddev[0] / mean[0]);
 }
@@ -279,12 +279,12 @@ public:
 		return z;
 	}
 	
-	void applyFilter(const UMat& H)
+	void applyFilter(const UMat& H) CV_OVERRIDE
 	{
 		mulSpectrums(m_dft, H, m_dft, 0);
 	}
 	
-	UMat createLPF(float f) const
+	UMat createLPF(float f) const CV_OVERRIDE
 	{
 		float sigma = f * pow(log(1.0/pow(LPF_F, 2)), -1.0/(2.0*LPF_N));
 		UMat H(m_sizePad, CV_32FC2);
