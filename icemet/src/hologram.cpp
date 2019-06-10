@@ -186,10 +186,8 @@ public:
 	
 	void recon(UMat& dst, float z, ReconOutput output) CV_OVERRIDE
 	{
-		propagate(z);
-		
-		// Generate output
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
+		propagate(z);
 		switch (output) {
 		case RECON_OUTPUT_COMPLEX:
 			UMat(m_complex, Rect(Point(0, 0), m_sizeOrig)).copyTo(dst);
@@ -218,22 +216,19 @@ public:
 	void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) CV_OVERRIDE
 	{
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
+		int n = roundf((z1 - z0) / dz);
 		
-		// Allocate UMats
 		if (dstMin.empty())
 			dstMin = UMat(m_sizeOrig, CV_8UC1, Scalar(255));
-		int n = roundf((z1 - z0) / dz) - dst.size();
-		for (int i = 0; i < n; i++)
+		int empty = n - dst.size();
+		for (int i = 0; i < empty; i++)
 			dst.emplace_back(m_sizeOrig, CV_8UC1);
 		
-		int dstIdx = 0;
-		for (float z = z0; z < z1; z += dz) {
-			propagate(z);
-			
-			// Convert to real
+		for (int i = 0; i < n; i++) {
+			propagate(z0 + i*dz);
 			ocl::Kernel("amplitude_min_8u", ocl::icemet::hologram_oclsrc).args(
 				ocl::KernelArg::ReadOnly(m_complex),
-				ocl::KernelArg::WriteOnly(dst[dstIdx++]),
+				ocl::KernelArg::WriteOnly(dst[i]),
 				ocl::KernelArg::PtrReadWrite(dstMin)
 			).run(2, gsize, NULL, true);
 		}
