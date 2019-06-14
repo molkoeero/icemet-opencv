@@ -178,10 +178,10 @@ public:
 		CV_Assert(img.channels() == 1 && img.size() == m_sizeOrig);
 		
 		cv::UMat padded(m_sizePad, CV_32FC1, cv::mean(img));
-		img.copyTo(cv::UMat(padded, cv::Rect(cv::Point(0, 0), m_sizeOrig)));
+		img.convertTo(cv::UMat(padded, cv::Rect(cv::Point(0, 0), m_sizeOrig)), CV_32FC1);
 		
 		// FFT
-		dft(padded, m_dft, DFT_COMPLEX_INPUT|DFT_COMPLEX_OUTPUT|DFT_SCALE, m_sizeOrig.height);
+		dft(padded, m_dft, DFT_COMPLEX_OUTPUT|DFT_SCALE, m_sizeOrig.height);
 	}
 	
 	void recon(UMat& dst, float z, ReconOutput output) CV_OVERRIDE

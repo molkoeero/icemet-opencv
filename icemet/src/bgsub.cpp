@@ -28,7 +28,7 @@ public:
 		m_means = Mat(1, len, CV_32FC1);
 	}
 	
-	bool push(const UMat& img)
+	bool push(const UMat& img) CV_OVERRIDE
 	{
 		size_t gsize[1] = {(size_t)(m_size.width * m_size.height)};
 		ocl::Kernel("push", ocl::icemet::bgsub_oclsrc).args(
@@ -48,7 +48,7 @@ public:
 		return m_full;
 	}
 	
-	void meddiv(UMat& dst)
+	void meddiv(UMat& dst) CV_OVERRIDE
 	{
 		size_t gsize[1] = {(size_t)(m_size.width * m_size.height)};
 		ocl::Kernel("meddiv", ocl::icemet::bgsub_oclsrc).args(
