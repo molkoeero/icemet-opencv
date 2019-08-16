@@ -27,14 +27,14 @@ public:
 	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutput output=RECON_OUTPUT_AMPLITUDE) = 0;
 	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
 	
-	CV_WRAP virtual float focus(float z0, float z1, float dz, FocusMethod method=FOCUS_STD, int points=20) = 0;
+	CV_WRAP virtual float focus(float z0, float z1, float dz, FocusMethod method=FOCUS_STD, float K=3.0) = 0;
 	
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual UMat createLPF(float f) const = 0;
 	
 	CV_WRAP static float magnf(float dist, float z);
 	
-	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int first=0, int last=-1, int points=20);
+	CV_WRAP static void focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, int begin=0, int end=-1, float K=3.0);
 	
 	CV_WRAP static Ptr<Hologram> create(Size2i size, float psz, float lambda, float dist=0.0);
 };

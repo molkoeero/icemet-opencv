@@ -10,15 +10,8 @@ namespace cv { namespace icemet {
 typedef struct _focus_param {
 	int type; // OpenCV type
 	ReconOutput output;
-	double (*scoreFunc)(const UMat&);
+	std::function<double(const UMat&)> scoreFunc;
 } FocusParam;
-
-typedef struct _focus_result {
-	int imax;     // Index of the maximum value
-	int il;       // Left of the maximum
-	int ir;       // Right of the maximum
-	double score; // Maximum score found
-} FocusResult;
 
 static double scoreMin(const UMat& slice)
 {
@@ -69,49 +62,6 @@ static double scoreToG(const UMat& slice)
 	return sqrt(stddev[0] / mean[0]);
 }
 
-static int generateIndices(std::vector<int>& dst, int first, int last, int n)
-{
-	dst.clear();
-	float step = (float)(last - first) / n;
-	int prev = -1;
-	for (float idxf = first; roundf(idxf) < last; idxf += step) {
-		int idx = roundf(idxf);
-		if (idx != prev) {
-			prev = idx;
-			dst.push_back(idx);
-		}
-	}
-	int size = dst.size();
-	if (size)
-		dst[size-1] = last;
-	return size;
-}
-
-static void findBestIndices(FocusResult& res, const std::vector<double>& scores, const std::vector<int>& indices)
-{
-	res.imax = 0;
-	res.il = 0;
-	res.ir = 0;
-	res.score = 0;
-	int iimax = 0;
-	int sz = indices.size();
-	
-	// Find the index of largest value
-	for (int i = 0; i < sz; i++) {
-		int idx = indices[i];
-		double score = scores[i];
-		if (score > scores[iimax]) {
-			res.imax = idx;
-			res.score = score;
-			iimax = i;
-		}
-	}
-	
-	// Save left and right
-	res.il = iimax > 0 ? indices[iimax-1] : res.imax;
-	res.ir = iimax < sz-1 ? indices[iimax+1] : res.imax;
-}
-
 static const FocusParam focusParam[] {
 	{CV_32FC1, RECON_OUTPUT_AMPLITUDE, scoreMin},
 	{CV_32FC1, RECON_OUTPUT_AMPLITUDE, scoreMax},
@@ -123,6 +73,21 @@ static const FocusParam focusParam[] {
 static const FocusParam* getFocusParam(FocusMethod method)
 {
 	return &focusParam[method];
+}
+
+static double KSearch(std::function<double(double)> f, double begin, double end, double K, TermCriteria termcrit=TermCriteria(TermCriteria::MAX_ITER+TermCriteria::EPS, 1000, 2.0))
+{
+	int count = 0;
+	while (fabs(end - begin) > termcrit.epsilon && count++ < termcrit.maxCount) {
+		double low = begin + (end - begin) / K;
+		double high = end - (end - begin) / K;
+		
+		if (f(low) < f(high))
+			begin = low;
+		else
+			end = high;
+	}
+	return (end + begin) / 2.0;
 }
 
 class HologramImpl : public Hologram {
@@ -234,44 +199,26 @@ public:
 		}
 	}
 	
-	float focus(float z0, float z1, float dz, FocusMethod method, int points) CV_OVERRIDE
+	float focus(float z0, float z1, float dz, FocusMethod method, float K) CV_OVERRIDE
 	{
-		std::map<int, double> scoreMap;
 		const FocusParam* param = getFocusParam(method);
-		FocusResult res = {0, 0, (int)roundf((z1 - z0) / dz)-1, 0.0};
 		UMat slice(m_sizeOrig, param->type);
-		
-		// Start iterating
-		int n = points;
-		float z = z0;
-		while (n >= points) {
-			std::vector<int> indices;
-			n = generateIndices(indices, res.il, res.ir, points);
-			
-			// Fill our score vector
-			std::vector<double> scoreVec(n);
-			for (int i = 0; i < n; i++) {
-				int scoreIdx = indices[i];
-				
-				// Check if the score is already in our score map
-				auto it = scoreMap.find(scoreIdx);
-				if (it != scoreMap.end()) {
-					scoreVec[i] = it->second;
-				}
-				else {
-					// Calculate the score
-					recon(slice, z0 + scoreIdx*dz, param->output);
-					double newScore = param->scoreFunc(slice);
-					scoreVec[i] = newScore;
-					scoreMap[scoreIdx] = newScore;
-				}
+		std::map<int,double> scores;
+		auto f = [&](double x) {
+			int i = round(x);
+			auto it = scores.find(i);
+			if (it != scores.end()) {
+				return it->second;
 			}
-			
-			// Find the maximum value and surrounding indices
-			findBestIndices(res, scoreVec, indices);
-			z = z0 + res.imax*dz;
-		}
-		return z;
+			else {
+				recon(slice, z0 + i*dz, param->output);
+				double newScore = param->scoreFunc(slice);
+				scores[i] = newScore;
+				return newScore;
+			}
+		};
+		int i = KSearch(f, 0, roundf((z1 - z0) / dz)-1, K);
+		return z0 + i*dz;
 	}
 	
 	void applyFilter(const UMat& H) CV_OVERRIDE
@@ -299,48 +246,29 @@ float Hologram::magnf(float dist, float z)
 	return dist == 0.0 ? 1.0 : dist / (dist - z);
 }
 
-void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, int first, int last, int points)
+void Hologram::focus(std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, int begin, int end, float K)
 {
 	int sz = src.size();
-	last = last < 0 || last > sz-1 ? sz-1 : last;
+	end = end < 0 || end > sz-1 ? sz-1 : end;
 	
-	// We store every score in this map to make sure we don't calculate same
-	// scores multiple times
-	std::map<int,double> scoreMap;
 	const FocusParam* param = getFocusParam(method);
-	FocusResult res = {0, first, last, 0.0};
 	UMat slice(rect.height, rect.width, param->type);
-	
-	// Start iterating
-	int n = points;
-	while (n >= points) {
-		std::vector<int> indices;
-		n = generateIndices(indices, res.il, res.ir, points);
-		
-		// Fill our score vector
-		std::vector<double> scoreVec(n);
-		for (int i = 0; i < n; i++) {
-			int scoreIdx = indices[i];
-			
-			// Check if the score is already in our score map
-			auto it = scoreMap.find(scoreIdx);
-			if (it != scoreMap.end()) {
-				scoreVec[i] = it->second;
-			}
-			else {
-				// Calculate the score
-				UMat(src[scoreIdx], rect).convertTo(slice, param->type);
-				double newScore = param->scoreFunc(slice);
-				scoreVec[i] = newScore;
-				scoreMap[scoreIdx] = newScore;
-			}
+	std::map<int,double> scores;
+	auto f = [&](double x) {
+		int i = round(x);
+		auto it = scores.find(i);
+		if (it != scores.end()) {
+			return it->second;
 		}
-		
-		// Find the maximum value and surrounding indices
-		findBestIndices(res, scoreVec, indices);
-		idx = res.imax;
-		score = res.score;
-	}
+		else {
+			UMat(src[i], rect).convertTo(slice, param->type);
+			double newScore = param->scoreFunc(slice);
+			scores[i] = newScore;
+			return newScore;
+		}
+	};
+	idx = KSearch(f, begin, end, K);
+	score = f(idx);
 }
 
 Ptr<Hologram> Hologram::create(Size2i size, float psz, float lambda, float dist)
