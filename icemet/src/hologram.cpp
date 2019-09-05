@@ -13,6 +13,21 @@ typedef struct _focus_param {
 	std::function<double(const UMat&)> scoreFunc;
 } FocusParam;
 
+int ZRange::n()
+{
+	return roundf((stop - start) / step);
+}
+
+float ZRange::z(int i)
+{
+	return start + i*step;
+}
+
+int ZRange::i(float z)
+{
+	return roundf((z - start) / step);
+}
+
 static double scoreMin(const UMat& slice)
 {
 	double min, max;
@@ -178,10 +193,10 @@ public:
 		}
 	}
 	
-	void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) CV_OVERRIDE
+	void reconMin(std::vector<UMat>& dst, UMat& dstMin, ZRange z) CV_OVERRIDE
 	{
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
-		int n = roundf((z1 - z0) / dz);
+		int n = z.n();
 		
 		if (dstMin.empty())
 			dstMin = UMat(m_sizeOrig, CV_8UC1, Scalar(255));
@@ -190,7 +205,7 @@ public:
 			dst.emplace_back(m_sizeOrig, CV_8UC1);
 		
 		for (int i = 0; i < n; i++) {
-			propagate(z0 + i*dz);
+			propagate(z.z(i));
 			ocl::Kernel("amplitude_min_8u", ocl::icemet::hologram_oclsrc).args(
 				ocl::KernelArg::ReadOnly(m_complex),
 				ocl::KernelArg::WriteOnly(dst[i]),
@@ -199,7 +214,7 @@ public:
 		}
 	}
 	
-	float focus(float z0, float z1, float dz, FocusMethod method, float K) CV_OVERRIDE
+	float focus(ZRange z, FocusMethod method, float K) CV_OVERRIDE
 	{
 		const FocusParam* param = getFocusParam(method);
 		UMat slice(m_sizeOrig, param->type);
@@ -211,14 +226,40 @@ public:
 				return it->second;
 			}
 			else {
-				recon(slice, z0 + i*dz, param->output);
+				recon(slice, z.z(i), param->output);
 				double newScore = param->scoreFunc(slice);
 				scores[i] = newScore;
 				return newScore;
 			}
 		};
-		int i = KSearch(f, 0, roundf((z1 - z0) / dz)-1, K);
-		return z0 + i*dz;
+		return z.z(KSearch(f, 0, z.n()-1, K));
+	}
+	
+	float focus(ZRange z, std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method, float K) CV_OVERRIDE
+	{
+		const FocusParam* param = getFocusParam(method);
+		if (src.empty())
+			src = std::vector<UMat>(z.n());
+		UMat slice(rect.size(), param->type);
+		std::map<int,double> scores;
+		auto f = [&](double x) {
+			int i = round(x);
+			auto it = scores.find(i);
+			if (it != scores.end()) {
+				return it->second;
+			}
+			else {
+				if (src[i].empty())
+					recon(src[i], z.z(i), param->output);
+				UMat(src[i], rect).convertTo(slice, param->type);
+				double newScore = param->scoreFunc(slice);
+				scores[i] = newScore;
+				return newScore;
+			}
+		};
+		idx = KSearch(f, 0, z.n()-1, K);
+		score = f(idx);
+		return z.z(idx);
 	}
 	
 	void applyFilter(const UMat& H) CV_OVERRIDE

@@ -21,13 +21,28 @@ typedef enum _focus_method {
 	FOCUS_TOG
 } FocusMethod;
 
+class CV_EXPORTS_W ZRange {
+public:
+	ZRange() : start(0), stop(0), step(0) {}
+	ZRange(float start_, float stop_, float step_) : start(start_), stop(stop_), step(step_) {}
+	
+	int n();
+	float z(int i);
+	int i(float z);
+	
+	float start;
+	float stop;
+	float step;
+};
+
 class CV_EXPORTS_W Hologram : public Algorithm {
 public:
 	CV_WRAP virtual void setImg(const UMat& img) = 0;
 	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutput output=RECON_OUTPUT_AMPLITUDE) = 0;
-	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, float z0, float z1, float dz) = 0;
+	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, ZRange z) = 0;
 	
-	CV_WRAP virtual float focus(float z0, float z1, float dz, FocusMethod method=FOCUS_STD, float K=3.0) = 0;
+	CV_WRAP virtual float focus(ZRange z, FocusMethod method=FOCUS_STD, float K=3.0) = 0;
+	CV_WRAP virtual float focus(ZRange z, std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, float K=3.0) = 0;
 	
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
 	CV_WRAP virtual UMat createLPF(float f) const = 0;
