@@ -62,6 +62,7 @@ public:
 	CV_WRAP static Ptr<BGSubStack> create(Size2i imgSize, int len);
 };
 
+CV_EXPORTS_W void adjust(const Mat& src, Mat& dst, uchar a0, uchar a1, uchar b0, uchar b1);
 CV_EXPORTS_W void adjust(const UMat& src, UMat& dst, uchar a0, uchar a1, uchar b0, uchar b1);
 CV_EXPORTS_W void hist(const UMat& src, Mat& counts, Mat& bins, float min, float max, float step);
 CV_EXPORTS_W void imghist(const UMat& src, Mat& dst);
