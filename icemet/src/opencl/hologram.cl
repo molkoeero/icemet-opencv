@@ -122,10 +122,11 @@ __kernel void propagate(
 	dst[i] = cmul(src[i], cexp(cmul(prop[i], cnum(z, 0))));
 }
 
-/* Generates a super-Gaussian low-pass filter. */
-__kernel void lpf(
+/* Generates a super-Gaussian filter. */
+__kernel void supergaussian(
 	__global cfloat* H, int step, int offset, int h, int w,
 	float2 size,
+	int type,
 	float2 sigma,
 	int n
 )
@@ -137,7 +138,8 @@ __kernel void lpf(
 	float u = (float)(x < w/2 ? x : -(w - x)) / size.x;
 	float v = (float)(y < h/2 ? y : -(h - y)) / size.y;
 	
-	H[y*w + x] = cnum(exp(-1.0/2.0 * pow(pow(u / sigma.x, 2) + pow(v / sigma.y, 2), n)), 0.0);
+	float filter = exp(-1.0/2.0 * pow(pow(u / sigma.x, 2) + pow(v / sigma.y, 2), n));
+	H[y*w + x] = cnum(type == 0 ? filter : 1-filter, 0.0);
 }
 
 /* Applies 3x3 standard deviation filter to image. */

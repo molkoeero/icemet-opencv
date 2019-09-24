@@ -2,8 +2,8 @@
 
 #include "opencl_kernels_icemet.hpp"
 
-#define LPF_N 6
-#define LPF_F 0.5
+#define FILTER_N 6
+#define FILTER_F 0.5
 
 namespace cv { namespace icemet {
 
@@ -267,18 +267,29 @@ public:
 		mulSpectrums(m_dft, H, m_dft, 0);
 	}
 	
-	UMat createLPF(float f) const CV_OVERRIDE
+	UMat createFilter(float f, FilterType type) const CV_OVERRIDE
 	{
-		float sigma = f * pow(log(1.0/pow(LPF_F, 2)), -1.0/(2.0*LPF_N));
+		float sigma = f * pow(log(1.0/pow(FILTER_F, 2)), -1.0/(2.0*FILTER_N));
 		UMat H(m_sizePad, CV_32FC2);
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
-		ocl::Kernel("lpf", ocl::icemet::hologram_oclsrc).args(
+		ocl::Kernel("supergaussian", ocl::icemet::hologram_oclsrc).args(
 			ocl::KernelArg::WriteOnly(H),
 			Vec2f(m_psz*m_sizePad.width, m_psz*m_sizePad.height),
+			type,
 			Vec2f(sigma, sigma),
-			LPF_N
+			FILTER_N
 		).run(2, gsize, NULL, true);
 		return H;
+	}
+	
+	UMat createLPF(float f) const CV_OVERRIDE
+	{
+		return createFilter(f, FILTER_LOWPASS);
+	}
+	
+	UMat createHPF(float f) const CV_OVERRIDE
+	{
+		return createFilter(f, FILTER_HIGHPASS);
 	}
 };
 

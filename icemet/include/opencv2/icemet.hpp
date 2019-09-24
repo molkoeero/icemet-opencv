@@ -21,6 +21,11 @@ typedef enum _focus_method {
 	FOCUS_TOG
 } FocusMethod;
 
+typedef enum _filter_type {
+	FILTER_LOWPASS = 0,
+	FILTER_HIGHPASS
+} FilterType;
+
 class CV_EXPORTS_W ZRange {
 public:
 	ZRange() : start(0), stop(0), step(0) {}
@@ -45,7 +50,9 @@ public:
 	CV_WRAP virtual float focus(ZRange z, std::vector<UMat>& src, const Rect& rect, int &idx, double &score, FocusMethod method=FOCUS_STD, float K=3.0) = 0;
 	
 	CV_WRAP virtual void applyFilter(const UMat& H) = 0;
+	CV_WRAP virtual UMat createFilter(float f, FilterType type) const = 0;
 	CV_WRAP virtual UMat createLPF(float f) const = 0;
+	CV_WRAP virtual UMat createHPF(float f) const = 0;
 	
 	CV_WRAP static float magnf(float dist, float z);
 	
