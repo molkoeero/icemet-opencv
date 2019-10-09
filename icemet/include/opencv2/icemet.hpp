@@ -44,6 +44,8 @@ class CV_EXPORTS_W Hologram : public Algorithm {
 public:
 	CV_WRAP virtual void setImg(const UMat& img) = 0;
 	CV_WRAP virtual void recon(UMat& dst, float z, ReconOutput output=RECON_OUTPUT_AMPLITUDE) = 0;
+	
+	CV_WRAP virtual void min(UMat& dst, ZRange z) = 0;
 	CV_WRAP virtual void reconMin(std::vector<UMat>& dst, UMat& dstMin, ZRange z) = 0;
 	
 	CV_WRAP virtual float focus(ZRange z, FocusMethod method=FOCUS_STD, float K=3.0) = 0;

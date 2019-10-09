@@ -75,6 +75,19 @@ __kernel void phase(
 	dst[y*dst_w + x] = atan2(val.y, val.x);
 }
 
+/* Updates the minimum image. */
+__kernel void min_8u(
+	__global cfloat* src, int src_step, int src_offset, int src_h, int src_w,
+	__global uchar* dst, int dst_step, int dst_offset, int dst_h, int dst_w
+)
+{
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+	if (x >= dst_w || y >= dst_h) return;
+	uchar val = length(src[y*src_w + x]);
+	dst[y*dst_w + x] = min(val, dst[y*dst_w + x]);
+}
+
 /* Saves complex amplitude and updates the minimum image. */
 __kernel void amplitude_min_8u(
 	__global cfloat* src, int src_step, int src_offset, int src_h, int src_w,

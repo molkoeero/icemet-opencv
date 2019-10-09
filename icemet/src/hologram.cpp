@@ -193,6 +193,22 @@ public:
 		}
 	}
 	
+	void min(UMat& dst, ZRange z) CV_OVERRIDE
+	{
+		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
+		int n = z.n();
+		
+		if (dst.empty())
+			dst = UMat(m_sizeOrig, CV_8UC1, Scalar(255));
+		for (int i = 0; i < n; i++) {
+			propagate(z.z(i));
+			ocl::Kernel("min_8u", ocl::icemet::hologram_oclsrc).args(
+				ocl::KernelArg::ReadOnly(m_complex),
+				ocl::KernelArg::WriteOnly(dst)
+			).run(2, gsize, NULL, true);
+		}
+	}
+	
 	void reconMin(std::vector<UMat>& dst, UMat& dstMin, ZRange z) CV_OVERRIDE
 	{
 		size_t gsize[2] = {(size_t)m_sizePad.width, (size_t)m_sizePad.height};
